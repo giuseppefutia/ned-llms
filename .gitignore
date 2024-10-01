@@ -1,3 +1,7 @@
+# Project files
+notes
+src/neo4j_graph/config.ini
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
