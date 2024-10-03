@@ -17,15 +17,18 @@ class CandidateSelection:
         full_text_query = ""
         words = [el for el in input.split() if el]
 
-        for word in words[:-1]:
-            full_text_query += f" {word}~2 AND"
-            full_text_query += f" {words[-1]}~2"
+        if len(words) > 1:
+            for word in words[:-1]:
+                full_text_query += f" {word}~2 AND"
+                full_text_query += f" {words[-1]}~2"
+        else:
+            full_text_query = words[0] + "~2"
 
         return full_text_query.strip()
 
     def get_candidates(self, input, limit = 10):
         ft_query = self.generate_full_text_query(input)
         with self.store._driver.session() as session:
-            candidates = session.run(ft_query, index="entity", limit=limit)
+            candidates = session.run(self.full_text_query(), {"fulltextQuery": ft_query, "limit":limit})
 
-        return [{"snomed_id" :c["candidate_id"], "name": c['candidate_name']} for c in candidates]
+            return [{"snomed_id" :c["candidate_id"], "name": c['candidate_name']} for c in candidates]

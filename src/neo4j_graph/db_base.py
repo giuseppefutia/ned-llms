@@ -46,7 +46,6 @@ class GraphDBBase:
 
         other_params = dict([(key, maybe_convert(key, value)) for key, value in neo4j_params.items()
                              if key not in ignored_params])
-        # print(other_params)
 
         self._driver = GraphDatabase.driver(uri, auth=(user, password), **other_params)
         self._session = None

@@ -71,7 +71,6 @@ class NamedEntityRecognition:
                 {"role": "assistant", "content": assistant},
                 {"role": "user", "content": user}]
 
-
     def make_ner(self):
         # TODO improve to manage identical mentions multiple times
         messages = self.create_ner_prompt()
