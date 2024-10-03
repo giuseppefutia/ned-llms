@@ -6,7 +6,7 @@ class Logger:
     A custom logger class to handle logging in a standardized way.
     """
     
-    def __init__(self, log_file=None, log_level=logging.DEBUG):
+    def __init__(self, log_name, log_file=None, log_level=logging.DEBUG):
         """
         Initializes the Logger instance.
         
@@ -14,11 +14,11 @@ class Logger:
             log_file (str): Optional path to a log file. If not provided, logs will only go to the console.
             log_level (int): Logging level. Defaults to DEBUG.
         """
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger(log_name)
         self.logger.setLevel(log_level)
         
         # Create a log formatter
-        log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
         
         # Create a stream handler for console output
         console_handler = logging.StreamHandler()

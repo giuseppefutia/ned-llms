@@ -4,10 +4,11 @@ from nlp_task.ner import NamedEntityRecognition
 from nlp_task.ned_cs import CandidateSelection
 
 class NED():
-    def __init__(self, model, store, input):
+    def __init__(self, model, store, input, logger=None):
         self.model = model
         self.store = store
         self.input= input
+        self.logger = logger if logger else Logger(self.__class__.__name__)
     
     def select_candidates(self, sentence):
         for index, value in enumerate(sentence["entities"]):
@@ -16,6 +17,7 @@ class NED():
     
     
     def run(self):
+        self.logger.info("Named Entity Recognition (NER) Phase")
         ner = NamedEntityRecognition(self.model, self.store, self.input)
         out = ner.make_ner()
         

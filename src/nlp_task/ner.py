@@ -7,7 +7,7 @@ class NamedEntityRecognition:
         self.model = model
         self.store = store
         self.input_text = input_text
-        self.logger = logger if logger else Logger()
+        self.logger = logger if logger else Logger(self.__class__.__name__)
 
     def named_entity_query(self):
         query = """
