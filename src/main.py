@@ -3,6 +3,7 @@ from llm_model.model import LLM_Model
 from neo4j_graph.db_base import GraphDBBase
 from nlp_task.ner import NamedEntityRecognition
 from nlp_task.ned_cs import CandidateSelection
+from nlp_task.path_manager import PathExtraction
 
 class NED():
     def __init__(self, model, store, input, logger=None):
@@ -16,6 +17,12 @@ class NED():
             candidates = CandidateSelection(self.store).get_candidates(value["mention"])
             sentence["entities"][index]["candidates"] = candidates
     
+    def retrieve_paths(self, sentence, labels):
+        pe = PathExtraction(self.model, self.store, sentence, labels)
+        paths = pe.get_paths()
+
+        return paths
+    
     def run(self):
         self.logger.info("Named Entity Recognition (NER) Phase")
         ner = NamedEntityRecognition(self.model, self.store, self.input)
@@ -27,11 +34,15 @@ class NED():
                 if j['label'] not in labels:
                     labels.append(j['label'])
 
+        self.logger.info("Candidate Selection Phase")
         # Candidate Selection per sentence
         for sentence in out:
             self.add_candidates(sentence)
         
-        print(out)
+        self.logger.info("Path-based Context Phase")
+        for sentence in out:
+        # Graph paths generation for each sentence
+            paths = self.retrieve_paths(sentence, labels)
         
 if __name__ == '__main__':
     model = LLM_Model()
