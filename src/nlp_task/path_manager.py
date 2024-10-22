@@ -1,12 +1,16 @@
 from tqdm import tqdm
 import itertools
+import json
+from utils import minify_json, minify_text
+from logger import Logger
+
 
 class PathExtraction():
-  def __init__(self, model, store, candidates, named_entities):
+  def __init__(self, model, store, candidates, logger=None):
     self.model = model
     self.store = store
     self.candidates = candidates
-    self.named_entities = named_entities
+    self.logger = logger if logger else Logger(self.__class__.__name__)
 
   def create_mention_pairs(self):
     mentions = [i['id'] for i in self.candidates['entities']]
@@ -32,9 +36,7 @@ class PathExtraction():
       WITH collect(name) as hub_nodes
       MATCH (s1), (s2)
       WHERE s1.id="{s1_id}" AND
-            s2.id="{s2_id}" AND
-            ANY(x IN s1.type WHERE x IN {self.named_entities}) AND
-            ANY(x IN s2.type WHERE x IN {self.named_entities})
+            s2.id="{s2_id}"
       WITH s1, s2, allShortestPaths((s1)-[:SNOMED_RELATION*1..2]-(s2)) AS paths, hub_nodes
       UNWIND paths AS path
       WITH relationships(path) AS path_edges, nodes(path) as path_nodes, hub_nodes
@@ -50,7 +52,7 @@ class PathExtraction():
       THEN "(" + node_names[i] + ")" + '-[:' + rel_types[i] + ']->'
       ELSE "(" + node_names[i] + ")" + '<-[:' + rel_types[i] + ']-' END] as string_paths
       RETURN DISTINCT apoc.text.join(string_paths, '') AS `Extracted paths`
-    """.format(s1_id=s1_id, s2_id=s2_id, named_entities=self.named_entities)
+    """.format(s1_id=s1_id, s2_id=s2_id)
     return query
 
   def get_paths(self):
@@ -74,9 +76,69 @@ class PathExtraction():
 
         cleaned_paths = [sub_item['Extracted paths'] for item in paths for sub_item in item]
 
-        out = {}
-        out['paths'] = []
+        out = []
         for item in cleaned_paths:
-            out['paths'].append({'id': len(out['paths']) + 1, 'path': item})
+            out.append({'id': len(out) + 1, 'path': item})
 
         return out
+
+
+class PathTranslation():
+    def __init__(self, model, paths, logger=None):
+        self.model = model
+        self.paths = paths
+        self.logger = logger if logger else Logger(self.__class__.__name__)
+
+    def create_paths_to_text_prompt(self):
+        system = minify_text("""You are an assistant capable of translating a Neo4j graph path into a clear sentence. 
+                                Use the exact entity names from the path while generating the sentence. 
+                                The sentences will assist a large language model (LLM) in disambiguating biomedical entities. 
+                                Ensure the output is a valid JSON with no extraneous characters.""")
+
+        input = minify_json("""{"path": "(Hypertension)-[:RISK_FACTOR_FOR]->(Cardiovascular Disease)<-[:ASSOCIATED_WITH]-(Myocardial Infarction)"}""")
+
+        assistant = minify_json("""{"sentence": "Hypertension is a risk factor for cardiovascular disease. Myocardial infarction is also associated with cardiovascular disease, indicating that hypertension may increase the risk of experiencing a myocardial infarction through its connection to cardiovascular disease."}""")
+
+        user = minify_json(json.dumps(self.paths))
+
+        return [{"role": "system", "content": system},
+                {"role": "user", "content": input},
+                {"role": "assistant", "content": assistant},
+                {"role": "user", "content": user}]
+
+    def translate_paths_to_text(self):
+        messages = self.create_paths_to_text_prompt()
+        return json.loads(self.model.generate(messages))
+
+
+class PathSummarization():
+    def __init__(self, model, text_paths, logger=None):
+        self.model = model
+        self.text_paths = text_paths
+        self.logger = logger if logger else Logger(self.__class__.__name__)
+
+    def create_summarize_prompt(self):
+        system = minify_text("""You are an assistant that can summarize multiple sentences derived from ontology paths into a short summary
+                                This summary will be used to support a named entity disambiguation task. 
+                                Ensure the output is a valid JSON with no extraneous characters.""")
+
+        input = minify_json("""[
+                            {"sentence": "Hypertension is a risk factor for cardiovascular disease. Myocardial infarction is also associated with cardiovascular disease, indicating that hypertension may increase the risk of experiencing a myocardial infarction through its connection to cardiovascular disease."},
+                            {"sentence": "Diabetes mellitus is a complication that arises from an endocrine disorder. Diabetic retinopathy is also associated with endocrine disorders, suggesting that diabetes mellitus can lead to the development of diabetic retinopathy through its link to endocrine dysfunction."},
+                            {"sentence": "Asthma is associated with respiratory disorders. Allergic rhinitis is also linked to respiratory disorders, which implies that individuals with asthma may also experience allergic rhinitis due to their common association with respiratory conditions."},
+                            {"sentence": "Osteoporosis leads to bone weakness. Bone fractures are a result of bone weakness, indicating that osteoporosis can increase the likelihood of bone fractures due to the weakened state of the bones."}
+                            ]""")
+
+        assistant = minify_json("""{"context": "Hypertension is a risk factor for cardiovascular disease, which in turn increases the likelihood of experiencing a myocardial infarction. Similarly, diabetes mellitus is linked to endocrine disorders, potentially leading to complications such as diabetic retinopathy. Asthma and allergic rhinitis are both associated with respiratory disorders, suggesting a common link between these conditions. Finally, osteoporosis weakens bones, making individuals more susceptible to bone fractures."}""")
+
+        user = minify_json(json.dumps(self.text_paths))
+
+        return [{"role": "system", "content": system},
+                {"role": "user", "content": input},
+                {"role": "assistant", "content": assistant},
+                {"role": "user", "content": user}]
+
+    def summarize_paths(self):
+        messages = self.create_summarize_prompt()
+        out = self.model.generate(messages)
+        return json.loads(out)

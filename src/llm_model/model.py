@@ -1,4 +1,3 @@
-import json
 from openai import OpenAI
 
 class LLM_Model():

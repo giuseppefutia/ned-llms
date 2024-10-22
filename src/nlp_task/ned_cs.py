@@ -5,9 +5,9 @@ class CandidateSelection:
 
     def full_text_query(self):
         query = """
-                CALL db.index.fulltext.queryNodes("names", $fulltextQuery, {limit: $limit})
-                YIELD node
-                WHERE node:SnomedEntity
+                CALL db.index.fulltext.queryNodes("SnomedEntityName", $fulltextQuery, {limit: $limit})
+                YIELD node, score
+                WHERE node:SnomedEntity AND ANY(x IN node.type WHERE x IN $labels)
                 RETURN distinct node.name AS candidate_name, node.id AS candidate_id
                 """
 
@@ -19,16 +19,16 @@ class CandidateSelection:
 
         if len(words) > 1:
             for word in words[:-1]:
-                full_text_query += f" {word}~2 AND"
-                full_text_query += f" {words[-1]}~2"
+                full_text_query += f" {word}~0.80 AND "
+                full_text_query += f" {words[-1]}~0.80"
         else:
-            full_text_query = words[0] + "~2"
+            full_text_query = words[0] + "~0.80"
 
         return full_text_query.strip()
 
-    def get_candidates(self, input, limit = 10):
+    def get_candidates(self, input, labels, limit = 10):
         ft_query = self.generate_full_text_query(input)
         with self.store._driver.session() as session:
-            candidates = session.run(self.full_text_query(), {"fulltextQuery": ft_query, "limit":limit})
+            candidates = session.run(self.full_text_query(), {"fulltextQuery": ft_query, "labels": labels, "limit":limit})
 
             return [{"snomed_id" :c["candidate_id"], "name": c['candidate_name']} for c in candidates]
